@@ -1,0 +1,11 @@
+graph TD
+    A[客戶端] --> B(Node.js API Gateway)
+    B --> C[訊息佇列 (Kafka/RabbitMQ)]
+    C --> D[Go 簡訊發送引擎]
+    D --> E[上游 SMSC]
+    E --> F[電信網路]
+    F --> G[終端使用者手機]
+
+    B --> H[資料庫 (PostgreSQL/MySQL)]
+    D --> H
+    H --> I[監控與日誌系統]

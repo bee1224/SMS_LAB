@@ -1,0 +1,74 @@
+version: '3.8'
+
+services:
+  # 訊息隊列服務
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: sms-rabbitmq
+    ports:
+      - "5672:5672"   # 程式連線用
+      - "15672:15672" # 管理後台用 (guest/guest)
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Node.js API 服務
+  api:
+    build: ./nodejs-api
+    container_name: sms-api
+    ports:
+      - "3000:3000"
+    environment:
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  # Go SMPP 引擎服務
+  engine:
+    build: ./go-engine
+    container_name: sms-engine
+    environment:
+      - "RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672"
+      - "MONGO_URI=mongodb://admin:password@mongodb:27017"
+    depends_on:
+        rabbitmq:
+          condition: service_healthy
+        mongodb:
+          condition: service_started
+
+  # smpp-sim:
+  #   image: nandaperdana/smpp-server-mock
+  #   container_name: sms-smpp-sim
+  #   ports:
+  #     - "2775:2775" # SMPP 預設埠口
+
+
+  # 新增 MongoDB 資料庫
+  mongodb:
+    image: mongo:latest
+    container_name: sms-mongodb
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=password
+    volumes:
+      - mongo-data:/data/db # 即使容器重啟，資料也會留著
+
+  # 匯出 Excel 供查詢門號
+  export-service:
+    build: ./nodejs-export-excel
+    container_name: sms-export
+    ports:
+      - "3001:3001" # 換個埠口，避免跟 API 的 3000 衝突
+    environment:
+      - MONGO_URI=mongodb://admin:password@mongodb:27017
+    depends_on:
+      - mongodb
+
+
+volumes:
+  mongo-data: # 定義一個持久化空間
